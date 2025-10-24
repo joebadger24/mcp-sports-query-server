@@ -1,6 +1,8 @@
 ﻿using System.Text;
 using System.Text.Json;
+using SportsQuery.Server.Models;
 using SportsQuery.Server.ToolBox.Interfaces;
+using SportsQuery.Server.ToolBox.Services;
 
 namespace SportsQuery.Server.ToolBox.Tools;
 
@@ -8,13 +10,13 @@ public class GetDailySummaryTool : ITool
 {
     private static readonly HttpClient _httpClient = new();
 
-    private static readonly HashSet<string> SupportedSports = new()
-    {
+    private static readonly HashSet<string> SupportedSports =
+    [
         "football",
         "cricket",
         "rugby-union",
         "rugby-league"
-    };
+    ];
 
     public string Name => "get-daily-summary";
     public string Description => 
@@ -26,7 +28,7 @@ public class GetDailySummaryTool : ITool
         
         """;
 
-    public async Task<string> Execute(string[] args)
+    public async Task<ToolResult> ExecuteAsync(string[] args)
     {
         var date = DateTime.UtcNow;
         var sport = "football";
@@ -46,7 +48,7 @@ public class GetDailySummaryTool : ITool
             }
             else
             {
-                return $"Unsupported sport: '{inputSport}'\n Supported sports: {string.Join(", ", SupportedSports)}";
+                return ToolResult.CreateError($"Unsupported sport: '{inputSport}'\n Supported sports: {string.Join(", ", SupportedSports)}");
             }
         }
 
@@ -63,50 +65,41 @@ public class GetDailySummaryTool : ITool
         }
         catch (Exception ex)
         {
-            return $"Error fetching data: {ex.Message}";
+            return ToolResult.CreateError($"Error fetching data: {ex.Message}");
         }
 
         string jsonResponse = await response.Content.ReadAsStringAsync();
 
         using JsonDocument doc = JsonDocument.Parse(jsonResponse);
-        if (!doc.RootElement.TryGetProperty("eventGroups", out JsonElement eventGroups))
-        {
-            return "No event groups found in the response.";
-        }
 
+        DailySummary summary = sport switch
+        {
+            "cricket" => BBCSportJsonConvertor.CricketConvert(doc, date, sport),
+            _ => BBCSportJsonConvertor.DefaultSportConvert(doc, date, sport)
+        };
+
+        string formattedSummary = FormatSummary(summary);
+
+        return ToolResult.CreateSuccess(summary, formattedSummary);
+    }
+
+    private static string FormatSummary(DailySummary summary)
+    {
         StringBuilder sb = new();
-        sb.AppendLine($"\nDaily Summary for {date:yyyy-MM-dd} ({sport})\n");
+        sb.AppendLine($"\nDaily Summary for {summary.Date:yyyy-MM-dd} ({summary.Sport})\n");
 
-        foreach (var group in eventGroups.EnumerateArray())
+        foreach (var tournament in summary.Tournaments)
         {
-            string tournamentName = group.GetProperty("displayLabel").GetString() ?? "Unknown Tournament";
+            sb.AppendLine($"Tournament: {tournament.Name}");
 
-            if (!group.TryGetProperty("secondaryGroups", out JsonElement secondaryGroups))
-                continue;
-
-            foreach (var secondary in secondaryGroups.EnumerateArray())
+            foreach (var ev in tournament.Events)
             {
-                if (!secondary.TryGetProperty("events", out JsonElement events))
-                    continue;
-
-                if (events.GetArrayLength() == 0)
-                    continue;
-
-                sb.AppendLine($"{tournamentName}");
-
-                foreach (var match in events.EnumerateArray())
-                {
-                    string home = match.GetProperty("home").GetProperty("fullName").GetString() ?? "Home";
-                    string away = match.GetProperty("away").GetProperty("fullName").GetString() ?? "Away";
-                    string time = match.GetProperty("time").GetProperty("displayTimeUK").GetString() ?? "Unknown time";
-
-                    sb.AppendLine($"- {home} vs {away} at {time}");
-                }
-
-                sb.AppendLine();
+                sb.AppendLine($" - {ev.DisplayTime}: {ev.HomeTeam} vs {ev.AwayTeam}");
             }
+
+            sb.AppendLine();
         }
 
-        return sb.ToString().Trim();
+        return sb.ToString();
     }
 }

@@ -1,12 +1,13 @@
-﻿using SportsQuery.Server.ToolBox;
+﻿using SportsQuery.Server.Models;
+using SportsQuery.Server.ToolBox;
 using SportsQuery.Server.ToolBox.Interfaces;
 
 internal class Program
 {
     private static async Task Main(string[] args)
     {
-        ToolBox toolbox = new();
-        var tools = toolbox.Tools.ToDictionary(tool => tool.Name, tool => tool, StringComparer.OrdinalIgnoreCase);
+        ToolBox Toolbox = new();
+        var Tools = Toolbox.Tools.ToDictionary(tool => tool.Name, tool => tool, StringComparer.OrdinalIgnoreCase);
 
         Console.WriteLine("\nSports Query Server is Running...");
 
@@ -33,19 +34,25 @@ internal class Program
             if (command.Equals("tools", StringComparison.OrdinalIgnoreCase))
             {
                 Console.WriteLine("\nAvailable tools:");
-                foreach (var t in toolbox.Tools)
+                foreach (var t in Toolbox.Tools)
                 {
                     Console.WriteLine($"- {t.Name}: {t.Description}");
                 }
                 continue;
             }
 
-            if (tools.TryGetValue(command, out ITool? tool))
+            if (Tools.TryGetValue(command, out ITool? tool))
             {
                 try
                 {
-                    string result = await tool.Execute(arguments);
-                    Console.WriteLine(result);
+                    ToolResult result = await tool.ExecuteAsync(arguments);
+                    Console.WriteLine(result.Message);
+
+                    //if (!string.IsNullOrEmpty(result.Data))
+                    //{
+                    //    Console.WriteLine("\nData:");
+                    //    Console.WriteLine(result.Data);
+                    //}
                 }
                 catch (Exception ex)
                 {

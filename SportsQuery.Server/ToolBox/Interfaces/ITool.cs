@@ -1,4 +1,6 @@
-﻿namespace SportsQuery.Server.ToolBox.Interfaces;
+﻿using SportsQuery.Server.Models;
+
+namespace SportsQuery.Server.ToolBox.Interfaces;
 
 public interface ITool
 {
@@ -6,5 +8,5 @@ public interface ITool
 
     string Description { get; }
 
-    Task<string> Execute(string[] args);
+    Task<ToolResult> ExecuteAsync(string[] args);
 }
